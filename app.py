@@ -29,11 +29,16 @@ def cargar_datos():
     datos = hoja.get_all_records()
     if len(datos) > 0:
         df = pd.DataFrame(datos)
+        
+        # --- EL ESCUDO PROTECTOR ---
+        # Esto limpia cualquier espacio invisible al principio o final de tus títulos
+        df.columns = df.columns.str.strip() 
+        
         df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
         return df
     else:
         return pd.DataFrame(columns=["Fecha", "Tipo", "Categoría", "Monto", "Descripción"])
-
+        
 def guardar_registro(fecha, tipo, categoria, monto, descripcion):
     # Escribe la fila directamente en el Excel de tu Google Drive
     hoja.append_row([str(fecha), tipo, categoria, monto, descripcion])
