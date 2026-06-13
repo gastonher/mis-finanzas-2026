@@ -1,29 +1,53 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os
+import gspread
+import json
 from datetime import datetime
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Mi Ecosistema Financiero", page_icon="📊", layout="wide")
 
-ARCHIVO_DATOS = "mis_finanzas_2026.csv"
+# --- NUEVO: CONEXIÓN A GOOGLE SHEETS ---
+@st.cache_resource
+def conectar_sheets():
+    # Lee la llave secreta que guardaste en Streamlit
+    credenciales_json = st.secrets["GOOGLE_CREDENTIALS"]
+    creds_dict = json.loads(credenciales_json)
+    
+    # Se conecta a Google usando tu bot
+    gc = gspread.service_account_from_dict(creds_dict)
+    
+    # Abre exactamente tu archivo (el nombre debe coincidir con el título de tu Excel)
+    sh = gc.open("Base_Finanzas_2026")
+    return sh.sheet1
 
-# 2. FUNCIONES PARA GUARDAR Y LEER DATOS
+hoja = conectar_sheets()
+
+# 2. FUNCIONES PARA LEER Y GUARDAR EN LA NUBE
 def cargar_datos():
-    if os.path.exists(ARCHIVO_DATOS):
-        df = pd.read_csv(ARCHIVO_DATOS)
+    datos = hoja.get_all_records()
+    if len(datos) > 0:
+        df = pd.DataFrame(datos)
         df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
         return df
     else:
         return pd.DataFrame(columns=["Fecha", "Tipo", "Categoría", "Monto", "Descripción"])
 
-def guardar_datos(df):
-    df.to_csv(ARCHIVO_DATOS, index=False)
+def guardar_registro(fecha, tipo, categoria, monto, descripcion):
+    # Escribe la fila directamente en el Excel de tu Google Drive
+    hoja.append_row([str(fecha), tipo, categoria, monto, descripcion])
+
+def borrar_ultimo_registro(df):
+    datos = hoja.get_all_records()
+    if len(datos) > 0:
+        # Calcula la última fila (+1 por el encabezado, +1 porque gspread cuenta desde 1)
+        fila_a_borrar = len(datos) + 1
+        hoja.delete_rows(fila_a_borrar)
 
 df = cargar_datos()
 
-# 3. BARRA LATERAL (PANEL DE CARGA Y HERRAMIENTAS)
+# 3. BARRA LATERAL (PANEL OPERATIVO)
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/YPF_logo.svg/1200px-YPF_logo.svg.png", width=100)
 st.sidebar.title("Panel Operativo")
 
@@ -32,16 +56,11 @@ if not df.empty:
     df['Mes-Año'] = df['Fecha'].dt.strftime('%m-%Y')
     meses_disponibles = ["Todos"] + list(df['Mes-Año'].dropna().unique())
     mes_seleccionado = st.sidebar.selectbox("📅 Mes a Analizar", meses_disponibles)
-    
-    if mes_seleccionado != "Todos":
-        df_filtrado = df[df['Mes-Año'] == mes_seleccionado]
-    else:
-        df_filtrado = df
+    df_filtrado = df[df['Mes-Año'] == mes_seleccionado] if mes_seleccionado != "Todos" else df
 else:
     df_filtrado = df
     st.sidebar.info("Cargá datos para habilitar filtros.")
 
-# Conversor Bimonetario
 cotizacion_usd = st.sidebar.number_input("Cotización Dólar (ARS/USD)", min_value=500.0, value=1200.0, step=10.0)
 st.sidebar.markdown("---")
 
@@ -71,37 +90,25 @@ with st.sidebar.form("formulario_movimientos", clear_on_submit=True):
     boton_guardar = st.form_submit_button("Guardar Movimiento")
     
     if boton_guardar and monto > 0:
-        nuevo_registro = pd.DataFrame([{
-            "Fecha": fecha, "Tipo": tipo, "Categoría": categoria, 
-            "Monto": monto, "Descripción": descripcion
-        }])
-        df = pd.concat([df, nuevo_registro], ignore_index=True)
-        guardar_datos(df)
-        st.success("¡Guardado correctamente!")
+        guardar_registro(fecha, tipo, categoria, monto, descripcion)
+        st.success("¡Guardado en Google Drive correctamente!")
         st.rerun()
 
-# Herramientas extra (Borrar último y Exportar)
+# Herramientas
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Herramientas")
 if st.sidebar.button("🗑️ Borrar último registro"):
     if not df.empty:
-        df = df.iloc[:-1] # Elimina la última fila
-        guardar_datos(df)
+        borrar_ultimo_registro(df)
+        st.success("Último registro eliminado.")
         st.rerun()
 
 if not df.empty:
     csv = df.to_csv(index=False).encode('utf-8')
-    st.sidebar.download_button(
-        label="📥 Descargar a Excel (CSV)",
-        data=csv,
-        file_name='mis_finanzas_export.csv',
-        mime='text/csv',
-    )
-
+    st.sidebar.download_button(label="📥 Descargar a Excel (CSV)", data=csv, file_name='exportacion.csv', mime='text/csv')
 
 # 4. PANTALLA PRINCIPAL DIVIDIDA EN PESTAÑAS (TABS)
 st.title("📊 Ecosistema Financiero")
-
 tab_dashboard, tab_historial, tab_metas = st.tabs(["📈 Dashboard y Análisis", "📝 Historial de Movimientos", "🎯 Mis Metas"])
 
 # --- PESTAÑA 1: DASHBOARD ---
@@ -121,18 +128,14 @@ with tab_dashboard:
     
     if not df_filtrado.empty and egresos_totales > 0:
         st.subheader("🧠 Inteligencia Financiera")
-        
-        # Categorización para Regla 50/30/20 y Tasa de Ahorro
         cat_fijos = ["Costos Fijos (Alquiler/Servicios)", "Suscripciones (Netflix/Gym)", "Mantenimiento Moto / Nafta"]
         cat_ahorro = ["Proyecto Moto XR250", "Ahorro / Interlagos F1"]
         
         df_egresos = df_filtrado[df_filtrado["Tipo"] == "Egreso"]
-        
         gasto_fijo = df_egresos[df_egresos["Categoría"].isin(cat_fijos)]["Monto"].sum()
         gasto_ahorro = df_egresos[df_egresos["Categoría"].isin(cat_ahorro)]["Monto"].sum()
         gasto_variable = egresos_totales - gasto_fijo - gasto_ahorro
         
-        # Tasa de Ahorro Real
         tasa_ahorro = (gasto_ahorro / ingresos_totales * 100) if ingresos_totales > 0 else 0
         
         col_tasa, col_regla = st.columns([1, 2])
@@ -174,18 +177,15 @@ with tab_historial:
     st.subheader("Registro de Movimientos")
     if not df_filtrado.empty:
         df_mostrar = df_filtrado.sort_values(by="Fecha", ascending=False).reset_index(drop=True)
-        # Formatear la fecha para que se vea más linda en la tabla
         df_mostrar['Fecha'] = df_mostrar['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_mostrar, use_container_width=True)
     else:
-        st.info("No hay movimientos registrados para mostrar.")
+        st.info("No hay movimientos registrados.")
 
 # --- PESTAÑA 3: METAS ---
 with tab_metas:
     st.subheader("🎯 Progreso de Objetivos 2026")
-    st.markdown("Visualizá cuánto te falta para lograr tus metas financieras.")
     
-    # Podés cambiar los valores "objetivo" acá según tus costos reales
     OBJETIVO_MOTO = 3000000 
     OBJETIVO_F1 = 1500000
     
@@ -196,11 +196,9 @@ with tab_metas:
     pct_f1 = min(total_f1 / OBJETIVO_F1, 1.0)
     
     col_m1, col_m2 = st.columns(2)
-    
     with col_m1:
         st.info("🏍️ Proyecto Moto XR250")
         st.progress(pct_moto, text=f"${total_moto:,.0f} de ${OBJETIVO_MOTO:,.0f} ({pct_moto*100:.1f}%)")
-        
     with col_m2:
         st.success("🏎️ Viaje Interlagos F1")
         st.progress(pct_f1, text=f"${total_f1:,.0f} de ${OBJETIVO_F1:,.0f} ({pct_f1*100:.1f}%)")
