@@ -4,6 +4,7 @@ import plotly.express as px
 import gspread
 import json
 from datetime import datetime
+import requests
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Mi Ecosistema Financiero", page_icon="📊", layout="wide")
@@ -66,7 +67,22 @@ else:
     df_filtrado = df
     st.sidebar.info("Cargá datos para habilitar filtros.")
 
-cotizacion_usd = st.sidebar.number_input("Cotización Dólar (ARS/USD)", min_value=500.0, value=1200.0, step=10.0)
+# --- NUEVO: OBTENCIÓN AUTOMÁTICA DEL DÓLAR BLUE ---
+@st.cache_data(ttl=3600) # Actualiza el valor cada 1 hora (3600 segundos)
+def obtener_dolar_blue():
+    try:
+        url = "https://dolarapi.com/v1/dolares/blue"
+        respuesta = requests.get(url, timeout=5)
+        datos = respuesta.json()
+        return float(datos["venta"]) # Usamos el precio de venta
+    except:
+        return 1200.0 # Valor de rescate por si la API se cae algún día
+
+dolar_hoy = obtener_dolar_blue()
+
+# Conversor Bimonetario Automático
+cotizacion_usd = st.sidebar.number_input("Cotización Dólar Blue (ARS)", min_value=500.0, value=dolar_hoy, step=10.0)
+st.sidebar.caption("🔄 Actualizado automáticamente via DolarApi")
 st.sidebar.markdown("---")
 
 # Formulario de carga
