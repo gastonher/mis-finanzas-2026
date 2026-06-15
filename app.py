@@ -41,15 +41,16 @@ def cargar_datos():
         return pd.DataFrame(columns=["Fecha", "Tipo", "Categoría", "Monto", "Descripción"])
         
 def guardar_registro(fecha, tipo, categoria, monto, descripcion):
-    # Escribe la fila directamente en el Excel de tu Google Drive
-    hoja.append_row([str(fecha), tipo, categoria, monto, descripcion])
+    # En vez de "pegarlo al final", forzamos a que INSERTE una fila nueva arriba de todo (Fila 2)
+    # Esto empuja los datos viejos hacia abajo y evita que se sobreescriban
+    hoja.insert_row([str(fecha), tipo, categoria, monto, descripcion], index=2)
 
 def borrar_ultimo_registro(df):
     datos = hoja.get_all_records()
     if len(datos) > 0:
-        # Calcula la última fila (+1 por el encabezado, +1 porque gspread cuenta desde 1)
-        fila_a_borrar = len(datos) + 1
-        hoja.delete_rows(fila_a_borrar)
+        # Como los registros nuevos ahora entran siempre en la Fila 2, 
+        # para deshacer el último movimiento, simplemente borramos la Fila 2
+        hoja.delete_rows(2)
 
 df = cargar_datos()
 
