@@ -176,7 +176,7 @@ with tab_dashboard:
     st.markdown("---")
     
     if not df_filtrado.empty and egresos_totales > 0:
-        st.subheader("🧠 Inteligencia Financiera")
+        st.subheader("🚦 Semáforo Financiero y Regla 50/30/20")
         cat_fijos = ["Costos Fijos (Alquiler/Servicios)", "Suscripciones (Netflix/Gym)", "Mantenimiento Moto / Nafta"]
         
         df_egresos = df_filtrado[df_filtrado["Tipo"] == "Egreso"]
@@ -186,26 +186,37 @@ with tab_dashboard:
         gasto_ahorro = df_egresos[df_egresos["Categoría"].isin(df_metas["Nombre"].unique())]["Monto"].sum()
         gasto_variable = egresos_totales - gasto_fijo - gasto_ahorro
         
+        pct_fijo = (gasto_fijo / ingresos_totales * 100) if ingresos_totales > 0 else 0
+        pct_var = (gasto_variable / ingresos_totales * 100) if ingresos_totales > 0 else 0
         tasa_ahorro = (gasto_ahorro / ingresos_totales * 100) if ingresos_totales > 0 else 0
         
-        col_tasa, col_regla = st.columns([1, 2])
+        # --- EL SEMÁFORO INTELIGENTE ---
+        col_semaforo, col_barras = st.columns([1, 1])
         
-        with col_tasa:
-            st.info(f"**Tasa de Ahorro:** {tasa_ahorro:.1f}%")
-            if tasa_ahorro >= 20:
-                st.success("¡Excelente! Estás ahorrando/invirtiendo por encima del 20% recomendado.")
-            elif tasa_ahorro > 0:
-                st.warning("Estás ahorrando, pero intentá acercarte al 20%.")
+        with col_semaforo:
+            st.markdown("**Diagnóstico del Mes:**")
+            
+            # 1. Análisis de Gastos Variables (El gran peligro)
+            if pct_var > 40:
+                st.error("🔴 **ALERTA ROJA:** Tus gastos variables superaron el 40%. Estás quemando capital que debería ir a la XR250 o a Interlagos.")
+            elif pct_var > 30:
+                st.warning("🟠 **CUIDADO:** Gastos variables por encima del 30% ideal. Ojo con los gastos hormiga en la estación o compras de impulso.")
             else:
-                st.error("Alerta: No estás registrando ahorros este mes.")
+                st.success("🟢 **BIEN:** Gastos variables controlados bajo el 30%.")
+
+            # 2. Análisis de Ahorro e Inversión
+            if tasa_ahorro >= 20:
+                st.success("🟢 **EXCELENTE:** Tasa de ahorro espectacular. El plan de metas va sobre rieles.")
+            elif tasa_ahorro > 0:
+                st.warning(f"🟠 **ATENCIÓN:** Estás ahorrando ({tasa_ahorro:.1f}%), pero por debajo del 20% objetivo. Hay margen para ajustar.")
+            else:
+                st.error("🔴 **PELIGRO:** 0% de ahorro este mes. Los objetivos están estancados.")
                 
-        with col_regla:
-            st.markdown("**Regla 50/30/20 (Fijos / Variables / Ahorro)**")
-            pct_fijo = (gasto_fijo / ingresos_totales * 100) if ingresos_totales > 0 else 0
-            pct_var = (gasto_variable / ingresos_totales * 100) if ingresos_totales > 0 else 0
-            st.progress(min(pct_fijo / 50, 1.0), text=f"Fijos ({pct_fijo:.1f}% - Ideal 50%)")
-            st.progress(min(pct_var / 30, 1.0), text=f"Variables ({pct_var:.1f}% - Ideal 30%)")
-            st.progress(min(tasa_ahorro / 20, 1.0), text=f"Ahorro ({tasa_ahorro:.1f}% - Ideal 20%)")
+        with col_barras:
+            st.markdown("**Distribución Ideal vs Real:**")
+            st.progress(min(pct_fijo / 50, 1.0), text=f"Fijos ({pct_fijo:.1f}% - Límite Ideal 50%)")
+            st.progress(min(pct_var / 30, 1.0), text=f"Variables ({pct_var:.1f}% - Límite Ideal 30%)")
+            st.progress(min(tasa_ahorro / 20, 1.0), text=f"Ahorro ({tasa_ahorro:.1f}% - Objetivo 20%)")
 
         st.markdown("---")
 
