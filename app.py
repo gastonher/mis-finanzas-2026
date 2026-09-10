@@ -122,7 +122,9 @@ with st.sidebar.form("formulario_movimientos", clear_on_submit=True):
             if meta_nombre not in cat_base:
                 cat_base.append(meta_nombre)
                 
-    # Leemos qué otras categorías ya existen en el historial para no perderlas
+
+
+   # Leemos qué otras categorías ya existen en el historial para no perderlas
     cat_historial = list(df[df["Tipo"] == tipo]["Categoría"].dropna().unique()) if not df.empty else []
     cat_totales = sorted(list(set(cat_base + cat_historial))) + ["➕ Agregar Nueva Categoría..."]
     
@@ -134,15 +136,6 @@ with st.sidebar.form("formulario_movimientos", clear_on_submit=True):
         categoria_final = st.text_input("Nombre de la nueva categoría:")
         
     monto = st.number_input("Monto (ARS)", min_value=0.0, step=1000.0, format="%.2f")
-    descripcion = st.text_input("Descripción breve")
-    
-    boton_guardar = st.form_submit_button("Guardar Movimiento")
-    
-    if boton_guardar and monto > 0 and categoria_final != "":
-        guardar_registro(fecha, tipo, categoria_final, monto, descripcion)
-        st.success("¡Guardado en Google Drive correctamente!")
-        st.rerun()
-
 # Herramientas
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Herramientas")
